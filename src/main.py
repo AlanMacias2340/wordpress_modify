@@ -6,7 +6,8 @@ import requests
 
 app = FastAPI()
 
-# mount static files directory so index.html and login.html can be served
+# mount static files directory so index.html, login.html, products.html and other assets
+# are available under /static
 app.mount("/static", StaticFiles(directory=pathlib.Path(__file__).parent), name="static")
 
 @app.get("/", response_class=HTMLResponse)
@@ -44,13 +45,51 @@ async def login(
                 consumer_secret=consumer_secret,
                 version="wc/v3",
             )
-            # Example call to list products to verify connection
+            # Example call to list products to verify connection, limit to 5
             wc_resp = wcapi.get("products")
+            wc_body = wc_resp.json() if wc_resp.ok else wc_resp.text
+            if isinstance(wc_body, list):
+                wc_body = wc_body[:5]  # only keep first five products
             result["woocommerce"] = {
                 "status_code": wc_resp.status_code,
-                "body": wc_resp.json() if wc_resp.ok else wc_resp.text,
+                "body": wc_body,
             }
         except Exception as e:
             result["woocommerce_error"] = str(e)
 
     return result
+
+@app.get("/products_html", response_class=HTMLResponse)
+async def products_page():
+    # serve the static products.html page
+    html_path = pathlib.Path(__file__).parent / "products.html"
+    return HTMLResponse(html_path.read_text())
+
+
+@app.get("/products")
+async def get_products(
+    wp_url: str,
+    consumer_key: str | None = None,
+    consumer_secret: str | None = None,
+):
+    # call WooCommerce API to list products (limited)
+    response = {"woocommerce": {}}
+    if consumer_key and consumer_secret:
+        try:
+            from woocommerce import API as WCAPI
+            wcapi = WCAPI(
+                url=wp_url.rstrip("/"),
+                consumer_key=consumer_key,
+                consumer_secret=consumer_secret,
+                version="wc/v3",
+            )
+            wc_resp = wcapi.get("products")
+            wc_body = wc_resp.json() if wc_resp.ok else wc_resp.text
+            if isinstance(wc_body, list):
+                wc_body = wc_body[:5]
+            response["woocommerce"] = {"status_code": wc_resp.status_code, "body": wc_body}
+        except Exception as e:
+            response["woocommerce_error"] = str(e)
+    else:
+        response["error"] = "Missing WooCommerce credentials"
+    return response
