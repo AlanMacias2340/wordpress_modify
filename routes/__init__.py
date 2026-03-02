@@ -95,6 +95,52 @@ async def get_categories(
         response["error"] = "Missing WooCommerce credentials"
     return response
 
+@router.post("/update_product_category")
+async def update_product_category(
+    wp_url: str = Form(...),
+    consumer_key: str = Form(...),
+    consumer_secret: str = Form(...),
+    product_id: int = Form(...),
+    category_id: int = Form(...),
+    action: str = Form(...)  # "add" or "remove"
+):
+    response = {"success": False}
+    try:
+        from woocommerce import API as WCAPI
+        wcapi = WCAPI(
+            url=wp_url.rstrip("/"),
+            consumer_key=consumer_key,
+            consumer_secret=consumer_secret,
+            version="wc/v3",
+        )
+        # Get current product data
+        prod_resp = wcapi.get(f"products/{product_id}")
+        if not prod_resp.ok:
+            response["error"] = f"Failed to fetch product: {prod_resp.status_code}"
+            return response
+        
+        product = prod_resp.json()
+        current_cats = product.get("categories", [])
+        cat_ids = {c["id"] for c in current_cats}
+        
+        if action == "add":
+            cat_ids.add(category_id)
+        elif action == "remove":
+            cat_ids.discard(category_id)
+        
+        # Update product with new categories
+        update_data = {"categories": [{"id": cid} for cid in cat_ids]}
+        update_resp = wcapi.put(f"products/{product_id}", update_data)
+        
+        if update_resp.ok:
+            response["success"] = True
+            response["product"] = update_resp.json()
+        else:
+            response["error"] = f"Update failed: {update_resp.status_code}"
+    except Exception as e:
+        response["error"] = str(e)
+    return response
+
 @router.get("/search", response_class=HTMLResponse)
 async def search_page():
     # serve a dedicated product search page

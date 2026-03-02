@@ -43,16 +43,80 @@
         </div>
         <div id="split-container" style="display:flex; gap:1rem;">
             <div id="leftBox" style="flex:1;">
-                <h2>In category</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <h2>In category</h2>
+                    <button id="removeAllBtn" class="btn" style="padding:0.4rem 0.8rem;">Remove All</button>
+                </div>
                 <div id="leftProducts" class="products-grid"></div>
             </div>
             <div id="rightBox" style="flex:1;">
-                <h2>Other products</h2>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                    <h2>Other products</h2>
+                    <button id="addAllBtn" class="btn" style="padding:0.4rem 0.8rem;">Add All</button>
+                </div>
                 <div id="rightProducts" class="products-grid"></div>
             </div>
         </div>
     <script>
+        let currentInCat = [];
+        let currentNotInCat = [];
+        let currentCategory = null;
+        let currentSku = null;
+
+        async function updateProductCategory(productId, action) {
+            const wpUrl = localStorage.getItem('wp_url');
+            const consumerKey = localStorage.getItem('consumer_key');
+            const consumerSecret = localStorage.getItem('consumer_secret');
+            const categoryId = document.getElementById('categorySelect').value;
+            
+            if (!categoryId) {
+                alert('Please select a category first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('wp_url', wpUrl);
+            formData.append('consumer_key', consumerKey);
+            formData.append('consumer_secret', consumerSecret);
+            formData.append('product_id', productId);
+            formData.append('category_id', categoryId);
+            formData.append('action', action);
+
+            const resp = await fetch('/update_product_category', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await resp.json();
+            
+            if (result.success) {
+                loadProducts(currentSku, currentCategory);
+            } else {
+                alert('Update failed: ' + (result.error || 'Unknown error'));
+            }
+        }
+
+        async function updateAllProducts(action) {
+            const categoryId = document.getElementById('categorySelect').value;
+            if (!categoryId) {
+                alert('Please select a category first');
+                return;
+            }
+
+            const products = action === 'add' ? currentNotInCat : currentInCat;
+            if (products.length === 0) return;
+
+            if (!confirm(`${action === 'add' ? 'Add' : 'Remove'} ${products.length} products ${action === 'add' ? 'to' : 'from'} category?`)) {
+                return;
+            }
+
+            for (const p of products) {
+                await updateProductCategory(p.id, action);
+            }
+        }
+
         async function loadProducts(sku=null, category=null) {
+            currentSku = sku;
+            currentCategory = category;
             const wpUrl = localStorage.getItem('wp_url');
             const consumerKey = localStorage.getItem('consumer_key');
             const consumerSecret = localStorage.getItem('consumer_secret');
@@ -64,7 +128,6 @@
                 leftContainer.textContent = rightContainer.textContent = 'Missing connection data.';
                 return;
             }
-            // always fetch all products (ignore category param for request)
             const params = new URLSearchParams({
                 wp_url: wpUrl,
                 consumer_key: consumerKey || '',
@@ -82,21 +145,39 @@
                     inCat = all.filter(p => Array.isArray(p.categories) && p.categories.some(c => String(c.id) === String(category) || c.slug === category));
                 }
                 const notInCat = all.filter(p => !inCat.includes(p));
-                const render = (p, container) => {
+                currentInCat = inCat;
+                currentNotInCat = notInCat;
+
+                const render = (p, container, action) => {
                     const div = document.createElement('div');
                     div.className = 'product';
-                    div.innerHTML = `<h2>${p.name || '(no name)'}</h2>\n                            <p>Price: ${p.price || 'n/a'}</p>\n                            <p>Status: ${p.status || 'unknown'}</p>\n                            <p>Visibility: ${p.catalog_visibility || 'unknown'}</p>`;
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.style.alignItems = 'center';
+                    const info = document.createElement('div');
+                    info.innerHTML = `<h2 style="margin:0 0 0.25rem;">${p.name || '(no name)'}</h2>
+                            <p style="margin:0;">Price: ${p.price || 'n/a'}</p>
+                            <p style="margin:0;">Status: ${p.status || 'unknown'}</p>
+                            <p style="margin:0;">Visibility: ${p.catalog_visibility || 'unknown'}</p>`;
+                    const btn = document.createElement('button');
+                    btn.textContent = action === 'add' ? '→ Add' : '← Remove';
+                    btn.className = 'btn';
+                    btn.style.padding = '0.3rem 0.6rem';
+                    btn.style.marginLeft = '0.5rem';
+                    btn.onclick = () => updateProductCategory(p.id, action);
+                    div.appendChild(info);
+                    div.appendChild(btn);
                     container.appendChild(div);
                 };
                 if (inCat.length === 0 && category) {
                     leftContainer.textContent = 'No products in selected category.';
                 } else {
-                    inCat.forEach(p => render(p, leftContainer));
+                    inCat.forEach(p => render(p, leftContainer, 'remove'));
                 }
                 if (notInCat.length === 0) {
                     rightContainer.textContent = 'No other products.';
                 } else {
-                    notInCat.forEach(p => render(p, rightContainer));
+                    notInCat.forEach(p => render(p, rightContainer, 'add'));
                 }
             } else {
                 leftContainer.textContent = rightContainer.textContent = 'Unable to fetch products.';
@@ -104,7 +185,6 @@
         }
         document.addEventListener('DOMContentLoaded', () => {
             loadProducts();
-            // fetch categories and populate select
             const wpUrl = localStorage.getItem('wp_url');
             const consumerKey = localStorage.getItem('consumer_key');
             const consumerSecret = localStorage.getItem('consumer_secret');
@@ -138,6 +218,12 @@
                 document.getElementById('skuInput').value = '';
                 document.getElementById('categorySelect').value = '';
                 loadProducts();
+            });
+            document.getElementById('removeAllBtn').addEventListener('click', () => {
+                updateAllProducts('remove');
+            });
+            document.getElementById('addAllBtn').addEventListener('click', () => {
+                updateAllProducts('add');
             });
         });
     </script>
