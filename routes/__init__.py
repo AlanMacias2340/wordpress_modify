@@ -1,26 +1,21 @@
-from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, PlainTextResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import APIRouter, Request, Form
+from fastapi.responses import HTMLResponse
 import pathlib
 import requests
 
-app = FastAPI()
+router = APIRouter()
 
-# mount static files directory so index.html, login.html, products.html and other assets
-# are available under /static
-app.mount("/static", StaticFiles(directory=pathlib.Path(__file__).parent), name="static")
-
-@app.get("/", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    html_path = pathlib.Path(__file__).parent / "index.html"
+    html_path = pathlib.Path(__file__).parent.parent / "frontend" / "index.html"
     return HTMLResponse(html_path.read_text())
 
-@app.get("/login", response_class=HTMLResponse)
+@router.get("/login", response_class=HTMLResponse)
 async def login_form():
-    html_path = pathlib.Path(__file__).parent / "login.html"
+    html_path = pathlib.Path(__file__).parent.parent / "frontend" / "login.html"
     return HTMLResponse(html_path.read_text())
 
-@app.post("/login")
+@router.post("/login")
 async def login(
     wp_url: str = Form(...),
     consumer_key: str | None = Form(None),
@@ -45,7 +40,6 @@ async def login(
                 consumer_secret=consumer_secret,
                 version="wc/v3",
             )
-            # Example call to list products to verify connection, limit to 5
             wc_resp = wcapi.get("products")
             wc_body = wc_resp.json() if wc_resp.ok else wc_resp.text
             result["woocommerce"] = {
@@ -57,27 +51,26 @@ async def login(
 
     return result
 
-@app.get("/products_html", response_class=HTMLResponse)
+@router.get("/products_html", response_class=HTMLResponse)
 async def products_page():
     # serve the static products.html page
-    html_path = pathlib.Path(__file__).parent / "products.html"
+    html_path = pathlib.Path(__file__).parent.parent / "frontend" / "products.html"
     return HTMLResponse(html_path.read_text())
 
-@app.get("/search", response_class=HTMLResponse)
+@router.get("/search", response_class=HTMLResponse)
 async def search_page():
     # serve a dedicated product search page
-    html_path = pathlib.Path(__file__).parent / "search.html"
+    html_path = pathlib.Path(__file__).parent.parent / "frontend" / "search.html"
     return HTMLResponse(html_path.read_text())
 
-
-@app.get("/products")
+@router.get("/products")
 async def get_products(
     wp_url: str,
     consumer_key: str | None = None,
     consumer_secret: str | None = None,
     sku: str | None = None,
 ):
-    # call WooCommerce API to list products (limited) or filter by SKU
+    # call WooCommerce API to list products or filter by SKU
     response = {"woocommerce": {}}
     if consumer_key and consumer_secret:
         try:
