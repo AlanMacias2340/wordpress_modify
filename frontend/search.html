@@ -43,14 +43,14 @@
         <div id="split-container" style="display:flex; gap:1rem;">
             <div id="leftBox" style="flex:1;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                    <h2>In category</h2>
+                    <h2>In category <span id="inCatCount">(0)</span></h2>
                     <button id="removeAllBtn" class="btn" style="padding:0.4rem 0.8rem;">Remove All</button>
                 </div>
                 <div id="leftProducts" class="products-grid"></div>
             </div>
             <div id="rightBox" style="flex:1;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                    <h2>Other products</h2>
+                    <h2>Other products <span id="notInCatCount">(0)</span></h2>
                     <button id="addAllBtn" class="btn" style="padding:0.4rem 0.8rem;">Add All</button>
                 </div>
                 <div id="rightProducts" class="products-grid"></div>
@@ -146,6 +146,11 @@
                 const notInCat = all.filter(p => !inCat.includes(p));
                 currentInCat = inCat;
                 currentNotInCat = notInCat;
+                // update counters
+                const inCountSpan = document.getElementById('inCatCount');
+                const outCountSpan = document.getElementById('notInCatCount');
+                if (inCountSpan) inCountSpan.textContent = `(${inCat.length})`;
+                if (outCountSpan) outCountSpan.textContent = `(${notInCat.length})`;
 
                 const render = (p, container, action) => {
                     const div = document.createElement('div');
@@ -178,6 +183,9 @@
                 } else {
                     notInCat.forEach(p => render(p, rightContainer, 'add'));
                 }
+                // ensure counts match actual DOM
+                if (inCountSpan) inCountSpan.textContent = `(${leftContainer.children.length})`;
+                if (outCountSpan) outCountSpan.textContent = `(${rightContainer.children.length})`;
             } else {
                 leftContainer.textContent = rightContainer.textContent = 'Unable to fetch products.';
             }
