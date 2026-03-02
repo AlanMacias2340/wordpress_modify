@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordPress Login</title>
+</head>
+<body>
+    <h1>WordPress Connection</h1>
+    <form action="/login" method="post">
+        <label for="wp_url">WordPress URL:</label>
+        <input type="text" id="wp_url" name="wp_url" placeholder="https://example.com" required><br>
+        <!-- username/password removed; only URL and optional WC credentials needed -->
+        <fieldset>
+            <legend>WooCommerce API (optional)</legend>
+            <label for="consumer_key">Consumer Key:</label>
+            <input type="text" id="consumer_key" name="consumer_key"><br>
+            <label for="consumer_secret">Consumer Secret:</label>
+            <input type="text" id="consumer_secret" name="consumer_secret"><br>
+        </fieldset>
+        <button type="submit">Connect</button>
+    </form>
+</body>
+</html>
