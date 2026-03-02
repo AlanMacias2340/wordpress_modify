@@ -31,23 +31,38 @@
     </header>
     <div class="container">
         <h1>Products</h1>
-        <div class="filter" style="margin-bottom:1rem;">
+        <div class="filter" style="margin-bottom:1rem; display:flex; gap:0.5rem; align-items:center;">
+            <select id="categorySelect" style="padding:0.5rem;">
+                <option value="">All categories</option>
+            </select>
             <input type="text" id="skuInput" placeholder="Enter SKU to filter" style="padding:0.5rem; width:200px;" />
             <button id="skuBtn" class="btn" style="margin-left:0.5rem;">Search</button>
             <button id="allBtn" class="btn" style="margin-left:0.5rem;">Show All</button>
         </div>
-        <div id="products" class="products-grid"></div>
+        <div id="split-container" style="display:flex; gap:1rem;">
+            <div id="leftBox" style="flex:1;">
+                <h2>In category</h2>
+                <div id="leftProducts" class="products-grid"></div>
+            </div>
+            <div id="rightBox" style="flex:1;">
+                <h2>Other products</h2>
+                <div id="rightProducts" class="products-grid"></div>
+            </div>
+        </div>
     <script>
-        async function loadProducts(sku=null) {
+        async function loadProducts(sku=null, category=null) {
             const wpUrl = localStorage.getItem('wp_url');
             const consumerKey = localStorage.getItem('consumer_key');
             const consumerSecret = localStorage.getItem('consumer_secret');
-            const container = document.getElementById('products');
-            container.textContent = '';
+            const leftContainer = document.getElementById('leftProducts');
+            const rightContainer = document.getElementById('rightProducts');
+            leftContainer.textContent = '';
+            rightContainer.textContent = '';
             if (!wpUrl) {
-                container.textContent = 'Missing connection data.';
+                leftContainer.textContent = rightContainer.textContent = 'Missing connection data.';
                 return;
             }
+            // always fetch all products (ignore category param for request)
             const params = new URLSearchParams({
                 wp_url: wpUrl,
                 consumer_key: consumerKey || '',
@@ -58,31 +73,68 @@
             }
             const resp = await fetch('/products?' + params.toString());
             const json = await resp.json();
-            if (json.woocommerce && json.woocommerce.body) {
-                if (Array.isArray(json.woocommerce.body) && json.woocommerce.body.length === 0) {
-                    container.textContent = 'No products match the given SKU.';
-                    return;
+            if (json.woocommerce && json.woocommerce.body && Array.isArray(json.woocommerce.body)) {
+                const all = json.woocommerce.body;
+                let inCat = all;
+                if (category) {
+                    inCat = all.filter(p => Array.isArray(p.categories) && p.categories.some(c => String(c.id) === String(category) || c.slug === category));
                 }
-                json.woocommerce.body.forEach(p => {
+                const notInCat = all.filter(p => !inCat.includes(p));
+                const render = (p, container) => {
                     const div = document.createElement('div');
                     div.className = 'product';
-                    div.innerHTML = `<h2>${p.name || '(no name)'}</h2>\n                            <p>Price: ${p.price || 'n/a'}</p>`;
+                    div.innerHTML = `<h2>${p.name || '(no name)'}</h2>\n                            <p>Price: ${p.price || 'n/a'}</p>\n                            <p>Status: ${p.status || 'unknown'}</p>\n                            <p>Visibility: ${p.catalog_visibility || 'unknown'}</p>`;
                     container.appendChild(div);
-                });
+                };
+                if (inCat.length === 0 && category) {
+                    leftContainer.textContent = 'No products in selected category.';
+                } else {
+                    inCat.forEach(p => render(p, leftContainer));
+                }
+                if (notInCat.length === 0) {
+                    rightContainer.textContent = 'No other products.';
+                } else {
+                    notInCat.forEach(p => render(p, rightContainer));
+                }
             } else {
-                container.textContent = 'Unable to fetch products.';
+                leftContainer.textContent = rightContainer.textContent = 'Unable to fetch products.';
             }
         }
         document.addEventListener('DOMContentLoaded', () => {
             loadProducts();
+            // fetch categories and populate select
+            const wpUrl = localStorage.getItem('wp_url');
+            const consumerKey = localStorage.getItem('consumer_key');
+            const consumerSecret = localStorage.getItem('consumer_secret');
+            if (wpUrl && consumerKey && consumerSecret) {
+                const params = new URLSearchParams({
+                    wp_url: wpUrl,
+                    consumer_key: consumerKey,
+                    consumer_secret: consumerSecret,
+                });
+                fetch('/categories?' + params.toString())
+                    .then(r => r.json())
+                    .then(json => {
+                        const select = document.getElementById('categorySelect');
+                        if (json.woocommerce && Array.isArray(json.woocommerce.body)) {
+                            json.woocommerce.body.forEach(cat => {
+                                const opt = document.createElement('option');
+                                opt.value = cat.id || cat.slug || '';
+                                opt.textContent = cat.name || cat.slug || '(unnamed)';
+                                select.appendChild(opt);
+                            });
+                        }
+                    });
+            }
+
             document.getElementById('skuBtn').addEventListener('click', () => {
                 const sku = document.getElementById('skuInput').value.trim();
-                if (sku) {
-                    loadProducts(sku);
-                }
+                const category = document.getElementById('categorySelect').value;
+                loadProducts(sku, category || null);
             });
             document.getElementById('allBtn').addEventListener('click', () => {
                 document.getElementById('skuInput').value = '';
+                document.getElementById('categorySelect').value = '';
                 loadProducts();
             });
         });

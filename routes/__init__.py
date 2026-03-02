@@ -57,6 +57,44 @@ async def products_page():
     html_path = pathlib.Path(__file__).parent.parent / "frontend" / "products.html"
     return HTMLResponse(html_path.read_text())
 
+@router.get("/categories")
+async def get_categories(
+    wp_url: str,
+    consumer_key: str | None = None,
+    consumer_secret: str | None = None,
+):
+    response = {"woocommerce": {}}
+    if consumer_key and consumer_secret:
+        try:
+            from woocommerce import API as WCAPI
+            wcapi = WCAPI(
+                url=wp_url.rstrip("/"),
+                consumer_key=consumer_key,
+                consumer_secret=consumer_secret,
+                version="wc/v3",
+            )
+            per_page = 100
+            page = 1
+            all_items = []
+            wc_status = None
+            while True:
+                wc_resp = wcapi.get("products/categories", params={"per_page": per_page, "page": page})
+                wc_status = wc_resp.status_code
+                wc_body = wc_resp.json() if wc_resp.ok else wc_resp.text
+                if not isinstance(wc_body, list):
+                    all_items = wc_body
+                    break
+                all_items.extend(wc_body)
+                if len(wc_body) < per_page:
+                    break
+                page += 1
+            response["woocommerce"] = {"status_code": wc_status, "body": all_items}
+        except Exception as e:
+            response["woocommerce_error"] = str(e)
+    else:
+        response["error"] = "Missing WooCommerce credentials"
+    return response
+
 @router.get("/search", response_class=HTMLResponse)
 async def search_page():
     # serve a dedicated product search page
@@ -69,8 +107,9 @@ async def get_products(
     consumer_key: str | None = None,
     consumer_secret: str | None = None,
     sku: str | None = None,
+    category: str | None = None,
 ):
-    # call WooCommerce API to list products or filter by SKU
+    # call WooCommerce API to list products or filter by SKU/category
     response = {"woocommerce": {}}
     if consumer_key and consumer_secret:
         try:
@@ -84,6 +123,8 @@ async def get_products(
             params = {}
             if sku:
                 params["sku"] = sku
+            if category:
+                params["category"] = category
             # WooCommerce defaults to 10 items per page; iterate pages to collect all products
             per_page = 100
             page = 1
