@@ -48,8 +48,6 @@ async def login(
             # Example call to list products to verify connection, limit to 5
             wc_resp = wcapi.get("products")
             wc_body = wc_resp.json() if wc_resp.ok else wc_resp.text
-            if isinstance(wc_body, list):
-                wc_body = wc_body[:5]  # only keep first five products
             result["woocommerce"] = {
                 "status_code": wc_resp.status_code,
                 "body": wc_body,
@@ -65,14 +63,21 @@ async def products_page():
     html_path = pathlib.Path(__file__).parent / "products.html"
     return HTMLResponse(html_path.read_text())
 
+@app.get("/search", response_class=HTMLResponse)
+async def search_page():
+    # serve a dedicated product search page
+    html_path = pathlib.Path(__file__).parent / "search.html"
+    return HTMLResponse(html_path.read_text())
+
 
 @app.get("/products")
 async def get_products(
     wp_url: str,
     consumer_key: str | None = None,
     consumer_secret: str | None = None,
+    sku: str | None = None,
 ):
-    # call WooCommerce API to list products (limited)
+    # call WooCommerce API to list products (limited) or filter by SKU
     response = {"woocommerce": {}}
     if consumer_key and consumer_secret:
         try:
@@ -83,11 +88,29 @@ async def get_products(
                 consumer_secret=consumer_secret,
                 version="wc/v3",
             )
-            wc_resp = wcapi.get("products")
-            wc_body = wc_resp.json() if wc_resp.ok else wc_resp.text
-            if isinstance(wc_body, list):
-                wc_body = wc_body[:5]
-            response["woocommerce"] = {"status_code": wc_resp.status_code, "body": wc_body}
+            params = {}
+            if sku:
+                params["sku"] = sku
+            # WooCommerce defaults to 10 items per page; iterate pages to collect all products
+            per_page = 100
+            page = 1
+            all_items = []
+            wc_status = None
+            while True:
+                p = params.copy()
+                p.update({"per_page": per_page, "page": page})
+                wc_resp = wcapi.get("products", params=p)
+                wc_status = wc_resp.status_code
+                wc_body = wc_resp.json() if wc_resp.ok else wc_resp.text
+                if not isinstance(wc_body, list):
+                    # some error or single object returned; just return as-is
+                    all_items = wc_body
+                    break
+                all_items.extend(wc_body)
+                if len(wc_body) < per_page:
+                    break
+                page += 1
+            response["woocommerce"] = {"status_code": wc_status, "body": all_items}
         except Exception as e:
             response["woocommerce_error"] = str(e)
     else:

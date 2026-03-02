@@ -40,6 +40,7 @@
             </fieldset>
             <button type="submit" class="btn">Connect</button>
         </form>
+        <div id="result" style="margin-top:1rem;color:#d00;"></div>
     </div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -53,12 +54,21 @@
                     body: data
                 });
                 const json = await resp.json();
-                resultDiv.textContent = '';
-                // if WooCommerce data present, save connection and redirect without displaying it
-                if (json.woocommerce && json.woocommerce.body) {
-                    localStorage.setItem('wp_url', document.getElementById('wp_url').value);
-                    localStorage.setItem('consumer_key', document.getElementById('consumer_key').value);
-                    localStorage.setItem('consumer_secret', document.getElementById('consumer_secret').value);
+                if (resultDiv) {
+                    resultDiv.textContent = '';
+                }
+                // always store the URL (and any credentials) for later use
+                localStorage.setItem('wp_url', document.getElementById('wp_url').value);
+                const ck = document.getElementById('consumer_key').value;
+                const cs = document.getElementById('consumer_secret').value;
+                if (ck) {
+                    localStorage.setItem('consumer_key', ck);
+                }
+                if (cs) {
+                    localStorage.setItem('consumer_secret', cs);
+                }
+                // redirect when the POST succeeded (we don't need WooCommerce results for navigation)
+                if (resp.ok && !json.site_error) {
                     window.location.href = '/products_html';
                     return;
                 }

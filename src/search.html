@@ -3,42 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Products</title>
+    <title>Product Search</title>
     <style>
         body { font-family: Arial, sans-serif; background: #f4f4f9; color: #333; margin: 0; }
         header { background: #007BFF; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-        header a { color: white; text-decoration: none; font-weight: bold; }
+        header a { color: white; text-decoration: none; font-weight: bold; margin-left: 1rem; }
+        header .nav { display: flex; align-items: center; }
         .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
         h1 { margin-top: 0; }
         .products-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(200px,1fr)); gap: 1rem; }
         .product { background: #fff; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
         .product h2 { margin: 0 0 0.5rem; font-size: 1.1rem; }
         .product p { margin: 0; }
-        header .nav { display: flex; gap: 1rem; align-items: center; }
+        .search-box { margin-bottom: 1rem; }
+        .search-box input { padding:0.5rem; width:300px; }
     </style>
 </head>
 <body>
     <header>
         <div class="nav">
-            <a href="/products_html" style="text-decoration:underline;">Product List</a>
-            <a href="/search">Product Search</a>
+            <a href="/products_html">Product List</a>
+            <a href="/search" style="text-decoration:underline;">Product Search</a>
         </div>
         <a href="/login" id="backLink">&larr; Back</a>
     </header>
     <div class="container">
-        <h1>Products</h1>
-        <div class="filter" style="margin-bottom:1rem;">
-            <input type="text" id="skuInput" placeholder="Enter SKU to filter" style="padding:0.5rem; width:200px;" />
-            <button id="skuBtn" class="btn" style="margin-left:0.5rem;">Search</button>
-            <button id="allBtn" class="btn" style="margin-left:0.5rem;">Show All</button>
+        <h1>Product Search</h1>
+        <div class="search-box">
+            <input type="text" id="skuListHeader" placeholder="Enter SKUs (comma separated)" />
+            <button id="searchBtn" class="btn">Search</button>
         </div>
-        <div id="products" class="products-grid"></div>
+        <div id="results" class="products-grid"></div>
     <script>
-        async function loadProducts(sku=null) {
+        async function loadProducts(skuString) {
             const wpUrl = localStorage.getItem('wp_url');
             const consumerKey = localStorage.getItem('consumer_key');
             const consumerSecret = localStorage.getItem('consumer_secret');
-            const container = document.getElementById('products');
+            const container = document.getElementById('results');
             container.textContent = '';
             if (!wpUrl) {
                 container.textContent = 'Missing connection data.';
@@ -49,14 +50,14 @@
                 consumer_key: consumerKey || '',
                 consumer_secret: consumerSecret || ''
             });
-            if (sku) {
-                params.set('sku', sku);
+            if (skuString) {
+                params.set('sku', skuString);
             }
             const resp = await fetch('/products?' + params.toString());
             const json = await resp.json();
             if (json.woocommerce && json.woocommerce.body) {
                 if (Array.isArray(json.woocommerce.body) && json.woocommerce.body.length === 0) {
-                    container.textContent = 'No products match the given SKU.';
+                    container.textContent = 'No products match the provided SKU(s).';
                     return;
                 }
                 json.woocommerce.body.forEach(p => {
@@ -69,17 +70,13 @@
                 container.textContent = 'Unable to fetch products.';
             }
         }
+
         document.addEventListener('DOMContentLoaded', () => {
-            loadProducts();
-            document.getElementById('skuBtn').addEventListener('click', () => {
-                const sku = document.getElementById('skuInput').value.trim();
-                if (sku) {
-                    loadProducts(sku);
+            document.getElementById('searchBtn').addEventListener('click', () => {
+                const list = document.getElementById('skuListHeader').value.trim();
+                if (list) {
+                    loadProducts(list);
                 }
-            });
-            document.getElementById('allBtn').addEventListener('click', () => {
-                document.getElementById('skuInput').value = '';
-                loadProducts();
             });
         });
     </script>
